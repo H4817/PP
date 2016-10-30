@@ -1,10 +1,5 @@
 #include <thread>
 
-namespace {
-    const size_t ROWS_COUNTX = 3;
-    const size_t COLUMN_COUNTX = 3;
-}
-
 class ProcessCofactorMatrix {
 public:
     ProcessCofactorMatrix() = delete;
