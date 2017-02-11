@@ -1,76 +1,61 @@
-#include <iostream>
+#include <sstream>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <ctime>
 #include "PiCalculator.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 
-#include <unistd.h>
-#include <spawn.h>
-#include <sys/wait.h>
-
-extern char **environ;
-
-void test_fork_exec(void);
-
-void test_posix_spawn(void);
-
-int main(void) {
-    test_fork_exec();
-    test_posix_spawn();
-    return EXIT_SUCCESS;
-}
-
-void test_fork_exec(void) {
-    pid_t pid;
-    int status;
-    puts("Testing fork/exec");
-    fflush(NULL);
-    pid = fork();
-    switch (pid) {
-        case -1:
-            perror("fork");
-            break;
-        case 0:
-            execl("/bin/ls", "ls", (char *) 0);
-            perror("exec");
-            break;
-        default:
-            printf("Child id: %i\n", pid);
-            fflush(NULL);
-            if (waitpid(pid, &status, 0) != -1) {
-                printf("Child exited with status %i\n", status);
-            } else {
-                perror("waitpid");
-            }
-            break;
-    }
-}
-
-void test_posix_spawn(void) {
-    pid_t pid;
-    char *argv[] = {"ls", (char *) 0};
-    int status;
-    puts("Testing posix_spawn");
-    fflush(NULL);
-    status = posix_spawn(&pid, "/bin/ls", NULL, NULL, argv, environ);
-    if (status == 0) {
-        printf("Child id: %i\n", pid);
-        fflush(NULL);
-        if (waitpid(pid, &status, 0) != -1) {
-            printf("Child exited with status %i\n", status);
-        } else {
-            perror("waitpid");
+int main(int argc, char *argv[]) {
+    if (argc == 3) {
+        std::clock_t start;
+        std::istringstream ss(argv[1]);
+        int iterationsCount;
+        int processAmount;
+        if (!(ss >> processAmount)) {
+            std::cerr << "Invalid number " << argv[1] << '\n';
+            return 0;
         }
-    } else {
-        printf("posix_spawn: %s\n", strerror(status));
+        std::istringstream ss1(argv[2]);
+        if (!(ss1 >> iterationsCount)) {
+            std::cerr << "Invalid number " << argv[2] << '\n';
+        }
+        else {
+            pid_t pids[processAmount];
+            int pipefd[processAmount * 2];
+
+            for (int i = 0; i < processAmount; ++i) {
+                if (pipe(pipefd + i * 2) < 0) {
+                    perror("pipe");
+                }
+            }
+
+
+            for (int i = 0; i < processAmount; ++i) {
+                if ((pids[i] = fork()) < 0) {
+                    perror("fork");
+                    abort();
+                } else if (pids[i] == 0) {
+                    start = std::clock();
+                    std::cout << "Pi: " << PiCalculator::GetPi(iterationsCount) << std::endl;
+                    std::cout << "Time: " << (std::clock() - start) / (double) (CLOCKS_PER_SEC / 1000) << " ms"
+                              << std::endl;
+                    exit(0);
+                }
+            }
+
+            int status;
+            pid_t pid;
+            while (processAmount > 0) {
+                pid = wait(&status);
+                printf("Child with PID %ld exited with status 0x%x. Iterations count: %zu\n", (long) pid,
+                       status, iterationsCount);
+                --processAmount;  // TODO(pts): Remove pid from the pids array.
+            }
+        }
     }
+    else {
+        std::cerr << "You forgot to pass process amount and iterations count" << std::endl;
+    }
+    return 0;
 }
 
-
-
-
-//int main() {
-//    std::cout << PiCalculator::GetPi(10000000) << std::endl;
-//    return 0;
-//}
